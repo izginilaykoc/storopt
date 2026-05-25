@@ -1,0 +1,42 @@
+# SARIMAX Scenario Generator — default configuration
+#
+# All parameters here correspond to constructor kwargs of SarimaxScenarioGenerator.
+# Drop this file into config.scenarios.params in your YAML config to activate.
+#
+# Example:
+#   scenarios:
+#     method: "sarimax"
+#     n_scenarios: 20
+#     params: !include sarimax/config.yaml
+
+# ── Locked Step-6 SARIMAX model specification ────────────────────────────────
+# (Do not change without re-running the Step-6 rolling-window validation.)
+ar_lags: [1, 2, 24, 168]       # AR lags — list-form (non-seasonal); captures daily + weekly structure
+diff_order: 0                   # integration order — no differencing
+ma_lags: [1, 24, 168]           # MA lags — list-form; matches AR structure
+seasonal_order: [0, 0, 0, 0]   # (P, D, Q, s) — all zero; seasonality is handled via native lags above
+trend: "c"                      # constant term — anchors unconditional mean to historical price level
+                                # (without it, long-horizon paths decay toward 0 EUR/MWh)
+
+# ── Training window ──────────────────────────────────────────────────────────
+training_hours: 2160            # rolling training window length [hours] — 3 months (Step-6 winner)
+min_training_hours: 1008        # minimum required hours; the lag-168 spec needs ≥ 6 weeks to fit reliably
+
+# ── Fitting ───────────────────────────────────────────────────────────────────
+max_fit_iter: 200               # hard iteration cap; model converges in 20-50 iterations in practice
+convergence_tol: 0.0001         # L-BFGS pgtol: stop when projected gradient norm < this value
+                                # calibrated on real DK1 prices: gradient falls ~0.096→5.5e-5 at
+                                # convergence; 1e-4 exits at iter ~19 with negligible accuracy loss
+
+# ── Timezone ─────────────────────────────────────────────────────────────────
+local_tz: "Europe/Copenhagen"   # forecast origin is midnight local time on target_date
+
+# ── Column names (must match history panel schema) ────────────────────────────
+da_col: "da_eur_mwh"
+id_col: "id_eur_mwh"
+gen_col: "hr1_generation_mw"
+
+# ── Generation clipping ───────────────────────────────────────────────────────
+res_clip_max: null              # upper clip for bootstrapped generation [MW]
+                                # set to plant nameplate (e.g. 160.0 for HR1) to enforce physical bound
+                                # null = no upper clip (lower clip is always 0)

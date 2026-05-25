@@ -1,0 +1,15 @@
+# Horns Rev 1 (HR1) offshore wind farm case — DK1 market.
+# Inherits all defaults from default.yaml; only overrides are listed here.
+#
+# Plant: Horns Rev A (HR1), 160 MW, operated by Vattenfall
+# EIC:   45W000000000023U  (ENTSO-E Transparency Platform registered resource mRID)
+# Coordinates: 55.5297°N, 7.9061°E  (centre of farm, sourced from Open-Meteo docs)
+
+ingestion:
+  plant_eic: "45W000000000023U"
+  weather_lat: 55.5297
+  weather_lon: 7.9061
+  # Required: path to a pre-fetched ENTSO-E generation parquet file or directory.
+  # The ENTSO-E adapter only supports pre-fetched files; an empty string will raise an error.
+  # Example: generation_file: "./data/hr1_generation.parquet"
+  generation_file: ""

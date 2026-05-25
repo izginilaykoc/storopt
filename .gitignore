@@ -1,0 +1,55 @@
+# ── Secrets & credentials ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.virtualenv/
+
+# ── Data & cache ───────────────────────────────────────────────────────────────
+data/cache/
+data/outputs/
+*.parquet
+*.pkl
+*.pickle
+
+# ── Report cache ───────────────────────────────────────────────────────────────
+report/_sarimax_bundle.pkl
+report/_report_cache.pkl
+report/_sarimax_cache_build.log
+
+# ── Test & lint caches ─────────────────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# ── OS & editor ────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/settings.json
+*.swp
+*.swo
+
+# ── Claude Code internal ───────────────────────────────────────────────────────
+.claude/
+
+# ── Jupyter checkpoints ────────────────────────────────────────────────────────
+.ipynb_checkpoints/

@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "storopt"
+version = "0.1.0"
+description = "Modular stochastic dispatch optimizer for renewable + battery storage assets"
+requires-python = ">=3.11"
+dependencies = [
+    "pandas>=2.0",
+    "numpy>=1.26",
+    "pyomo>=6.7",
+    "highspy>=1.7",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+    "pyarrow>=14.0",
+    "python-dotenv>=1.0",
+    "typer>=0.12",
+    "scikit-learn>=1.4",
+    "entsoe-py>=0.6",
+    "statsmodels>=0.14",
+]
+
+[project.scripts]
+storopt = "storopt.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
