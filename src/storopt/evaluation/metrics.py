@@ -45,9 +45,12 @@ def _single_bundles(bundle: ScenarioBundle) -> list[ScenarioBundle]:
 def _solve_fixed_da(bundle: ScenarioBundle, config: RunConfig, da_bids: np.ndarray) -> OptimizationResult:
     """Solve with first-stage DA bids fixed (for EEV computation).
 
-    Relaxes q_da bounds before fixing so that EV bids computed on the mean bundle
-    (which may have tighter generation-derived bounds) do not cause infeasibility
-    when evaluated against the full multi-scenario bundle.
+    Relaxes both q_da and q_id bounds before fixing q_da. q_id is bounded in
+    _build() by the bundle's global max generation, which can be exceeded in any
+    single scenario where G[s,t] + |q_da[t]| > max_gen. The energy-balance
+    constraint plus the p_ch / p_dis box bounds already pin q_id implicitly;
+    the explicit box bound is therefore redundant for recourse and merely a
+    source of spurious infeasibility when q_da is fixed from an outside (EV) solve.
     """
     import time
     model = _build(bundle, config)
@@ -55,8 +58,46 @@ def _solve_fixed_da(bundle: ScenarioBundle, config: RunConfig, da_bids: np.ndarr
         model.q_da[t].setlb(None)
         model.q_da[t].setub(None)
         model.q_da[t].fix(float(da_bids[t - 1]))
+    for s in model.S:
+        for t in model.T:
+            model.q_id[s, t].setlb(None)
+            model.q_id[s, t].setub(None)
     status, elapsed = _solve(model, config)
     result = _extract(model, bundle, config)
+    result.solve_status = status
+    result.solve_time_s = elapsed
+    return result
+
+
+def _solve_single_scenario_ws(
+    single_bundle: ScenarioBundle, config: RunConfig, q_da_max_abs: float
+) -> OptimizationResult:
+    """Solve a single-scenario bundle with q_da bounds relaxed to a reference scale.
+
+    A single-scenario bundle would otherwise have q_da bounded by that scenario's
+    own max generation + battery power. WS represents the trader's profit with
+    perfect foresight, but their physical q_da range is still defined by the
+    plant + battery, not the realised scenario. We relax q_da to the full
+    bundle's reference scale (q_da_max_abs) so WS solves see the same q_da
+    feasible region that RP sees. Otherwise a tight bound makes WS < RP for
+    scenarios with low max generation, which violates WS >= RP analytically.
+    """
+    import time
+    model = _build(single_bundle, config)
+    for t in model.T:
+        model.q_da[t].setlb(-q_da_max_abs)
+        model.q_da[t].setub(+q_da_max_abs)
+    # Also relax q_id bounds: in a single-scenario bundle the box bound is
+    # set to that scenario's own max gen, which is much tighter than the
+    # full bundle's range. Energy balance + p_ch / p_dis bounds already pin
+    # q_id implicitly, so the explicit box is unnecessary and would otherwise
+    # restrict WS unfairly relative to RP.
+    for s in model.S:
+        for t in model.T:
+            model.q_id[s, t].setlb(None)
+            model.q_id[s, t].setub(None)
+    status, elapsed = _solve(model, config)
+    result = _extract(model, single_bundle, config)
     result.solve_status = status
     result.solve_time_s = elapsed
     return result
@@ -102,9 +143,15 @@ def compute_vss_evpi(
     except RuntimeError:
         z_eev = float("nan")
 
-    # Wait-and-see (one solve per scenario)
+    # Wait-and-see (one solve per scenario) — use full bundle's q_da scale for parity with RP
     if compute_evpi:
-        ws_profits = [solver.solve(sb, config).expected_profit for sb in _single_bundles(bundle)]
+        ref_max = float(bundle.res_generation.max()) + max(
+            config.bess.power_discharge_mw, config.bess.power_charge_mw
+        )
+        ws_profits = [
+            _solve_single_scenario_ws(sb, config, ref_max).expected_profit
+            for sb in _single_bundles(bundle)
+        ]
         z_ws = float(np.dot(bundle.probabilities, ws_profits))
     else:
         z_ws = float("nan")

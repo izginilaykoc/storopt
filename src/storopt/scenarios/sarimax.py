@@ -232,49 +232,77 @@ class SarimaxScenarioGenerator(ScenarioGenerator):
         return self._fit_cache[key]
 
     def _fit_sarimax(self, series: pd.Series):
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            mod = SARIMAX(
-                series,
-                order=self._sarimax_order,
-                seasonal_order=self._sarimax_seasonal_order,
-                trend=self._trend,
-                enforce_stationarity=True,
-                enforce_invertibility=True,
-            )
-            try:
-                res = mod.fit(
-                    disp=False, method="lbfgs",
-                    maxiter=self._max_fit_iter, pgtol=self._convergence_tol,
-                )
-            except np.linalg.LinAlgError:
-                # Stationary Lyapunov solve fails for large (lag-168) state vectors when
-                # the covariance matrix is ill-conditioned. Retry with diffuse initialization,
-                # which avoids the discrete Lyapunov equation entirely.
+        """Fit SARIMAX with percentile-clipping fallback on unstable training data.
+
+        On heavy-tailed slices (e.g. DK1 cold-snap days with spikes >900 EUR/MWh
+        against a mean of ~87) the L-BFGS optimiser can land the ARMA polynomial
+        near the unit-root boundary, causing simulated forecast paths to explode
+        (1e10+ EUR/MWh observed). enforce_stationarity is a soft constraint that
+        does not always prevent this in the lag-168 spec.
+
+        Strategy:
+          1. Fit on the raw series.
+          2. If the simulation is unstable, clip training prices to [P1, P99]
+             and refit. Standard robust-statistics preprocessing — preserves
+             spec, removes only extreme outliers.
+          3. If still unstable, raise (caller treats as terminal).
+        """
+        def _fit_one(s: pd.Series):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
                 mod = SARIMAX(
-                    series,
+                    s,
                     order=self._sarimax_order,
                     seasonal_order=self._sarimax_seasonal_order,
                     trend=self._trend,
                     enforce_stationarity=True,
                     enforce_invertibility=True,
-                    initialization="approximate_diffuse",
                 )
-                res = mod.fit(
-                    disp=False, method="lbfgs",
-                    maxiter=self._max_fit_iter, pgtol=self._convergence_tol,
-                )
-        sigma2 = float(res.params["sigma2"])
-        if not np.isfinite(sigma2) or sigma2 <= 0:
-            raise RuntimeError(f"SARIMAX returned invalid sigma2={sigma2!r}")
-        # Stability check: simulated paths must stay within ±10 000 EUR/MWh
-        test_sim = np.asarray(res.simulate(nsimulations=24, anchor="end", repetitions=4))
-        if not np.isfinite(test_sim).all() or abs(test_sim).max() > 1e4:
-            raise RuntimeError(
-                f"SARIMAX fit unstable on this slice "
-                f"(simulate max={abs(test_sim).max():.2e}); refusing to generate scenarios."
-            )
-        return res
+                try:
+                    return mod.fit(
+                        disp=False, method="lbfgs",
+                        maxiter=self._max_fit_iter, pgtol=self._convergence_tol,
+                    )
+                except np.linalg.LinAlgError:
+                    mod = SARIMAX(
+                        s,
+                        order=self._sarimax_order,
+                        seasonal_order=self._sarimax_seasonal_order,
+                        trend=self._trend,
+                        enforce_stationarity=True,
+                        enforce_invertibility=True,
+                        initialization="approximate_diffuse",
+                    )
+                    return mod.fit(
+                        disp=False, method="lbfgs",
+                        maxiter=self._max_fit_iter, pgtol=self._convergence_tol,
+                    )
+
+        def _is_stable(res):
+            sigma2 = float(res.params["sigma2"])
+            if not np.isfinite(sigma2) or sigma2 <= 0:
+                return False, np.nan
+            test_sim = np.asarray(res.simulate(nsimulations=24, anchor="end", repetitions=4))
+            sim_max = abs(test_sim).max() if np.isfinite(test_sim).all() else float("inf")
+            return (sim_max <= 1e4), sim_max
+
+        res = _fit_one(series)
+        stable, sim_max = _is_stable(res)
+        if stable:
+            return res
+
+        lo, hi = np.percentile(series.dropna(), [1.0, 99.0])
+        clipped = series.clip(lo, hi)
+        res2 = _fit_one(clipped)
+        stable2, sim_max_2 = _is_stable(res2)
+        if stable2:
+            return res2
+
+        raise RuntimeError(
+            f"SARIMAX fit unstable on this slice — raw simulate max={sim_max:.2e}, "
+            f"clipped (P1={lo:.1f}, P99={hi:.1f}) simulate max={sim_max_2:.2e}; "
+            f"refusing to generate scenarios."
+        )
 
     @staticmethod
     def _simulate_pi_gaussian(

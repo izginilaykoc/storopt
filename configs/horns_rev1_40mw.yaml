@@ -1,0 +1,21 @@
+# Horns Rev 1 (HR1) — 40 MW / 80 MWh co-located battery (25% of plant capacity, 2-hour duration).
+# Realistic industry sizing for a co-located arbitrage/firming use case.
+# Compare to horns_rev1.yaml which carries a symbolic 1 MW / 2 MWh battery.
+
+ingestion:
+  plant_eic: "45W000000000023U"
+  weather_lat: 55.5297
+  weather_lon: 7.9061
+  generation_file: ""
+
+bess:
+  power_charge_mw: 40.0
+  power_discharge_mw: 40.0
+  energy_capacity_mwh: 80.0
+  soc_min_frac: 0.10           # 8 MWh
+  soc_max_frac: 0.90           # 72 MWh
+  soc_init_frac: 0.50          # 40 MWh
+  eta_charge: 0.95
+  eta_discharge: 0.95
+  deg_cost_eur_per_mwh: 10.0
+  max_cycles_per_day: null      # uncapped; battery dispatch limited by SOC bounds

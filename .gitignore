@@ -53,3 +53,7 @@ Thumbs.db
 
 # ── Jupyter checkpoints ────────────────────────────────────────────────────────
 .ipynb_checkpoints/
+
+# ── Generated rolling-backtest artifacts (regenerable by run_30_day.py) ───────
+report/artifacts/
+report/artifacts_knn/

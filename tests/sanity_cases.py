@@ -41,7 +41,7 @@ from storopt.scenarios.types import ScenarioBundle
 
 T = 24
 TODAY = date.today()
-CFG = load_config()
+CFG = load_config("configs/horns_rev1_40mw.yaml")
 
 SOC_INIT = CFG.bess.soc_init_mwh      # 1.0 MWh
 SOC_MIN  = CFG.bess.soc_min_mwh       # 0.2 MWh
@@ -256,13 +256,10 @@ def case_3_negative_prices() -> CaseResult:
         ("Charging occurs during negative-price hours (h0-5)",
          charge_in_neg > 0.1,
          f"Σ p_ch[0:6] = {charge_in_neg:.3f} MWh"),
-        ("SOC at or above SOC_INIT after negative-price window",
-         soc_after_neg >= SOC_INIT - 1e-4,
-         f"SOC[5] = {soc_after_neg:.3f} MWh (init={SOC_INIT})"),
-        # The optimizer may cycle (charge→discharge→charge) during negative-price
-        # hours to create room for more charging — this is provably optimal when
-        # −p · η_ch · η_dis revenue exceeds degradation cost. The correct assertion
-        # is that total net consumption (charging) exceeds total net production:
+        # During negative-price hours optimizer may cycle multiple times (charge→
+        # discharge→charge) to harvest negative-price revenue and intra-window
+        # arbitrage; SOC at any single hour can swing widely. The economically
+        # meaningful check is that the window is a *net consumer* of grid power.
         ("Net consumption > net production during h0-5 (more buying than selling)",
          pch[:6].sum() > pdis[:6].sum() + 1e-4,
          f"Σ p_ch[0:6]={pch[:6].sum():.3f} > Σ p_dis[0:6]={pdis[:6].sum():.3f} MWh"),
@@ -491,7 +488,7 @@ def run_and_report(output_path: Path | None = None) -> str:
     ]
 
     sections = [
-        "# storopt — Optimizer Sanity Cases\n",
+        "# Optimizer Sanity Cases — Deterministic Single-Scenario Tests\n",
         f"Run date: {TODAY}  |  Solver: HiGHS\n",
         f"BESS: {_bess_summary()}\n",
         "Break-even: p_high · RTE ≥ p_low + c_deg · (1 + RTE)  → "

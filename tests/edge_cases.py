@@ -56,7 +56,7 @@ from storopt.scenarios.types import ScenarioBundle
 
 T = 24
 TODAY = date.today()
-CFG = load_config()
+CFG = load_config("configs/horns_rev1_40mw.yaml")
 
 SOC_INIT = CFG.bess.soc_init_mwh      # 1.0 MWh
 SOC_MIN  = CFG.bess.soc_min_mwh       # 0.2 MWh
@@ -679,7 +679,7 @@ def run_and_report(output_path: Path | None = None) -> str:
     ]
 
     sections = [
-        "# storopt — Optimizer Edge Cases\n",
+        "# Optimizer Edge Cases — Boundary Conditions & Break-Even Tests\n",
         f"Run date: {TODAY}  |  Solver: HiGHS\n",
         f"BESS: {_bess_summary()}\n",
         f"Break-even thresholds: uniform_neg={P_BE_UNIFORM_NEG:.1f} €/MWh  |  "
